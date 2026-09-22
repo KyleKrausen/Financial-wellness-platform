@@ -8,17 +8,59 @@ const db = require("./db");
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+const isProduction = process.env.NODE_ENV === "production";
+
+if (!process.env.SESSION_SECRET) {
+    throw new Error("SESSION_SECRET is required in the .env file.");
+}
+
 app.use(session({
-  secret: process.env.SESSION_SECRET || "development-only-secret-change-me",
-  resave: false,
-  saveUninitialized: false,
-  cookie: { httpOnly: true, secure: false, sameSite: "lax", maxAge: 1000 * 60 * 60 * 4 }
+    name: "financialWellness.sid",
+    secret: process.env.SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+        httpOnly: true,
+        secure: isProduction,
+        sameSite: "lax",
+        maxAge: 1000 * 60 * 60 * 4
+    }
 }));
+
 app.use(express.static(path.join(__dirname, "public")));
 
 function requireLogin(req, res, next) {
-  if (!req.session.userId) return res.status(401).json({ error: "Please log in." });
+  if (!req.session.userId) {
+    return res.status(401).json({ error: "Please log in." });
+  }
+
   next();
+}
+
+function regenerateSession(req) {
+  return new Promise((resolve, reject) => {
+    req.session.regenerate((error) => {
+      if (error) reject(error);
+      else resolve();
+    });
+  });
+}
+
+function saveSession(req) {
+  return new Promise((resolve, reject) => {
+    req.session.save((error) => {
+      if (error) reject(error);
+      else resolve();
+    });
+  });
+}
+
+function normalizeEmail(email) {
+  return String(email || "").trim().toLowerCase();
+}
+
+function isValidEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
 app.get("/api/health", async (_req, res) => {
@@ -27,18 +69,61 @@ app.get("/api/health", async (_req, res) => {
 });
 
 app.post("/api/register", async (req, res) => {
-  const { firstName, lastName, email, username, password } = req.body;
-  if (![firstName, lastName, email, username, password].every(Boolean)) return res.status(400).json({ error: "All fields are required." });
-  if (String(password).length < 8) return res.status(400).json({ error: "Password must be at least 8 characters." });
+  let { firstName, lastName, email, username, password } = req.body;
+
+  firstName = String(firstName || "").trim();
+  lastName = String(lastName || "").trim();
+  email = normalizeEmail(email);
+  username = String(username || "").trim();
+  password = String(password || "");
+
+  if (!firstName || !lastName || !email || !username || !password) {
+    return res.status(400).json({
+      error: "All fields are required."
+    });
+  }
+
+  if (!isValidEmail(email)) {
+    return res.status(400).json({
+      error: "Please enter a valid email address."
+    });
+  }
+
+  if (username.length < 3 || username.length > 50) {
+    return res.status(400).json({
+      error: "Username must be between 3 and 50 characters."
+    });
+  }
+
+  if (password.length < 8) {
+    return res.status(400).json({
+      error: "Password must be at least 8 characters."
+    });
+  }
   try {
     const passwordHash = await bcrypt.hash(password, 12);
     const [result] = await db.execute(
       "INSERT INTO users (first_name,last_name,email,username,password_hash) VALUES (?,?,?,?,?)",
-      [firstName.trim(), lastName.trim(), email.trim().toLowerCase(), username.trim(), passwordHash]
+      [firstName, lastName, email, username, passwordHash]
     );
-    await db.execute("INSERT INTO user_roles (user_id,role_id) SELECT ?,role_id FROM roles WHERE role_name='USER'", [result.insertId]);
-    req.session.userId = result.insertId;
-    res.status(201).json({ message: "Account created.", user: { userId: result.insertId, firstName } });
+    await db.execute(
+  "INSERT INTO user_roles (user_id,role_id) SELECT ?,role_id FROM roles WHERE role_name='USER'",
+  [result.insertId]
+);
+
+await regenerateSession(req);
+
+req.session.userId = result.insertId;
+
+await saveSession(req);
+
+res.status(201).json({
+  message: "Account created.",
+  user: {
+    userId: result.insertId,
+    firstName
+  }
+});
   } catch (error) {
     if (error.code === "ER_DUP_ENTRY") return res.status(409).json({ error: "That email or username is already registered." });
     console.error(error); res.status(500).json({ error: "Registration failed." });
@@ -46,18 +131,60 @@ app.post("/api/register", async (req, res) => {
 });
 
 app.post("/api/login", async (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password) return res.status(400).json({ error: "Email and password are required." });
+  const email = normalizeEmail(req.body.email);
+  const password = String(req.body.password || "");
+
+  if (!email || !password) {
+    return res.status(400).json({
+      error: "Email and password are required."
+    });
+  }
+
+  if (!isValidEmail(email)) {
+    return res.status(400).json({
+      error: "Please enter a valid email address."
+    });
+  }
   try {
-    const [rows] = await db.execute("SELECT user_id,first_name,password_hash,account_status FROM users WHERE email=?", [email.trim().toLowerCase()]);
+    const [rows] = await db.execute("SELECT user_id,first_name,password_hash,account_status FROM users WHERE email=?", [email]);
     const user = rows[0];
     if (!user || user.account_status !== "ACTIVE" || !(await bcrypt.compare(password, user.password_hash))) return res.status(401).json({ error: "Invalid email or password." });
-    req.session.userId = user.user_id;
-    res.json({ message: "Login successful.", user: { userId: user.user_id, firstName: user.first_name } });
-  } catch (error) { console.error(error); res.status(500).json({ error: "Login failed." }); }
+await regenerateSession(req);
+
+req.session.userId = user.user_id;
+
+await saveSession(req);
+
+res.json({
+  message: "Login successful.",
+  user: {
+    userId: user.user_id,
+    firstName: user.first_name
+  }
+});
+} catch (error) {
+  console.error(error);
+  res.status(500).json({ error: "Login failed." });
+}
 });
 
-app.post("/api/logout", (req, res) => req.session.destroy(() => res.json({ message: "Signed out." })));
+app.post("/api/logout", (req, res) => {
+  req.session.destroy((error) => {
+    if (error) {
+      console.error("Logout error:", error);
+
+      return res.status(500).json({
+        error: "Unable to sign out."
+      });
+    }
+
+    res.clearCookie("financialWellness.sid");
+
+    res.json({
+      message: "Signed out."
+    });
+  });
+});
 
 app.get("/api/me", requireLogin, async (req, res) => {
   const [rows] = await db.execute("SELECT user_id,first_name,last_name,email,username FROM users WHERE user_id=?", [req.session.userId]);
