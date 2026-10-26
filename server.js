@@ -556,15 +556,27 @@ app.use((error, _req, res, next) => {
 
 const port = Number(process.env.PORT || 3000);
 
-app.listen(port, async () => {
-  console.log(`Financial Wellness running at http://localhost:${port}`);
+if (require.main === module) {
+  app.listen(port, async () => {
+    console.log(`Financial Wellness running at http://localhost:${port}`);
 
-  try {
-    await db.query("SELECT 1");
-    console.log("Connected to XAMPP MySQL.");
-  } catch (error) {
-    console.error(
-      "MySQL connection failed. Start MySQL in XAMPP and check .env."
-    );
-  }
-});
+    try {
+      await db.query("SELECT 1");
+      console.log("Connected to XAMPP MySQL.");
+    } catch (error) {
+      console.error(
+        "MySQL connection failed. Start MySQL in XAMPP and check .env."
+      );
+    }
+  });
+}
+
+module.exports = {
+  app,
+  normalizeEmail,
+  normalizeText,
+  isValidEmail,
+  isValidIsoDate,
+  parsePositiveNumber,
+  parsePositiveInteger
+}
