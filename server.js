@@ -573,6 +573,7 @@ if (require.main === module) {
 
 module.exports = {
   app,
+  requireLogin,
   normalizeEmail,
   normalizeText,
   isValidEmail,
