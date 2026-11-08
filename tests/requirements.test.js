@@ -1,7 +1,6 @@
-const { describe, it } = require("node:test");
+const { describe, it, before, after } = require("node:test");
 const assert = require("node:assert/strict");
-const { app, requireLogin, isValidEmail, normalizeEmail, normalizeText, isValidIsoDate, parsePositiveNumber, parsePositiveInteger } = require("../server.js");
-require("../server.js");
+const { app, requireLogin, isValidEmail, normalizeEmail, isValidIsoDate, parsePositiveNumber, parsePositiveInteger } = require("../server.js");
 
 // FR1  User Registration and Auth
 function routeHandler(method, path) {
@@ -31,61 +30,69 @@ describe("FR1 User Registration and Auth", () => {
         assert.equal(isValidEmail("user@examplecom"), false);
     });
 
-    it("FR1_Test3 Reject an email with no @ symbol", () => {
-        assert.equal(isValidEmail("userexample.com"), false);
-    });
-
-    it("FR1_Test4 Reject an email with bad spacing", () => {
+    it("FR1_Test3 Reject an email with bad spacing", () => {
         assert.equal(isValidEmail("us er@example.com"), false);
     });
 
-    it("FR1_Test5 Rejects an empty email input", () => {
+    it("FR1_Test4 Rejects an empty email input", () => {
         assert.equal(isValidEmail(""), false);
     });
 
-    it("FR1_Test6 normalize valid emails", () => {
+    it("FR1_Test5 normalize valid emails", () => {
         assert.equal(normalizeEmail(" User@Example.COM "), "user@example.com");
     });
 
-    it("FR1_Test7 register rejects missing fields", async () => {
+    it("FR1_Test6 register rejects missing fields", async () => {
         assert.deepEqual(await callRoute("post", "/api/register", { ...validUser, password: ""}),
             { status: 400, body: { error: "All fields are required." } 
         });
     });
 
-    it ("FR1_Test8 register rejects too short usernames", async () => {
+    it ("FR1_Test7 register rejects too short usernames", async () => {
         assert.deepEqual(await callRoute("post", "/api/register", { ...validUser, username: "te" }),
             { status: 400, body: { error: "Username must be between 3 and 50 characters." } 
         });
     });
 
-    it ("FR1_Test9 register rejects too short passwords", async () => {
+    it ("FR1_Test8 register rejects too short passwords", async () => {
         assert.deepEqual(await callRoute("post", "/api/register", { ...validUser, password: "Pass123" }),
             { status: 400, body: { error: "Password must be at least 8 characters." } 
         });
     });
 
-    it ("FR1_Test10 register rejects invalid emails", async () => {
-        assert.deepEqual(await callRoute("post", "/api/register", { ...validUser, email: "testexample.com" }),
+    it ("FR1_Test9 register rejects invalid emails", async () => {
+        assert.deepEqual(await callRoute("post", "/api/register", { ...validUser, email: "userexample.com" }),
             { status: 400, body: { error: "Please enter a valid email address." } 
         });
     });
 
-    it ("FR1_Test11 login rejects empty email and password", async () => {
+    it ("FR1_Test10 login rejects empty email and password", async () => {
         assert.deepEqual(await callRoute("post", "/api/login", { email: "", password: "" }),
             { status: 400, body: { error: "Email and password are required." } 
         });
     });
 
-    it ("FR1_Test12 login rejects empty email but good password", async () => {
+    it ("FR1_Test11 login rejects empty email but good password", async () => {
         assert.deepEqual(await callRoute("post", "/api/login", { email: "", password: "Password1!" }),
             { status: 400, body: { error: "Email and password are required." } 
         });
     });
 
-    it ("FR1_Test13 login rejects empty password but good email", async () => {
+    it ("FR1_Test12 login rejects empty password but good email", async () => {
         assert.deepEqual(await callRoute("post", "/api/login", { email: "user@example.com", password: "" }),
             { status: 400, body: { error: "Email and password are required." } 
+        });
+    });
+
+    it("FR1_Test13 login rejects bad email", async () => {
+        assert.deepEqual(await callRoute("post", "/api/login", { email: "userexample.com", password: "passworD1!" }),
+            { status: 400, body: { error: "Please enter a valid email address." }
+        });
+    });
+
+    it("FR1_Test14 register rejects a 51-character username", async () => {
+        assert.deepEqual(await callRoute("post", "/api/register", { ...validUser, username: "a".repeat(51) }),
+            { status: 400, body: { error: "Username must be between 3 and 50 characters." } 
         });
     });
 });
@@ -101,17 +108,7 @@ function fakeResponse() {
 }
 
 describe("FR2 Authenticated Session and Profile Access", () => {
-    it("FR2_Test1 blocks a request with no logged-in user", () => {
-        const req = { session: {} };
-        const res = fakeResponse();
-        let nextCalled = false;
-        requireLogin(req, res, () => { nextCalled = true; });
-        assert.equal(res.statusCode, 401);
-        assert.deepEqual(res.body, { error: "Please log in." });
-        assert.equal(nextCalled, false);
-    });
-
-    it("FR2_Test2 let logged-in user access", () => {
+    it("FR2_Test1 let logged-in user access", () => {
         const req = { session: { userId: 3 } };
         const res = fakeResponse();
         let nextCalled = false;
@@ -133,47 +130,39 @@ describe("FR3 Income Tracking", () => {
         assert.equal(parsePositiveNumber("1934.50"), 1934.5);
     });
 
-    it("FR3_Test2 rejects zero amount", () => {
-        assert.equal(parsePositiveNumber("0"), null);
-    });
-
-    it("FR3_Test3 rejects negative amount", () => {
+    it("FR3_Test2 rejects negative amount", () => {
         assert.equal(parsePositiveNumber("-2"), null);
     });
 
-    it("FR3_Test4 rejects non-numbers", () => {
+    it("FR3_Test3 rejects non-numbers", () => {
         assert.equal(parsePositiveNumber("hello"), null);
     });
 
-    it("FR3_Test5 accepts a valid YYYY-MM-DD date", () => {
+    it("FR3_Test4 accepts a valid YYYY-MM-DD date", () => {
         assert.equal(isValidIsoDate("2026-10-28"), true);
     });
 
-    it("FR3_Test6 rejects an invalid YYYY-MM-DD date", () => {
+    it("FR3_Test5 rejects an invalid YYYY-MM-DD date", () => {
         assert.equal(isValidIsoDate("2026-13-01"), false);
     });
 
-    it("FR3_Test7 rejects dates in the wrong format", () => {
+    it("FR3_Test6 rejects dates in the wrong format", () => {
         assert.equal(isValidIsoDate("10/28/2026"), false);
     });
 
-    it ("FR3_Test8 interpret only spaces as no date", () => {
-        assert.equal(normalizeText("   "), "");
-    });
-
-    it ("FR3_Test9 income route rejects only spaces", async () => {
+    it ("FR3_Test7 income route rejects only spaces", async () => {
         assert.deepEqual(await callRoute("post", "/api/income", { ...valideIncome, source: "   " }),
             { status: 400, body: { error: "Income source is required." } 
         });
     });
 
-    it ("FR3_Test10 income route rejects 0", async () => {
+    it ("FR3_Test8 income route rejects 0", async () => {
         assert.deepEqual(await callRoute("post", "/api/income", { ...valideIncome, amount: "0" }),
             { status: 400, body: { error: "Income amount must be a valid number greater than 0." } 
         });
     });
 
-    it ("FR3_Test11 income route rejects invalid dates", async () => {
+    it ("FR3_Test9 income route rejects invalid dates", async () => {
         assert.deepEqual(await callRoute("post", "/api/income", { ...valideIncome, incomeDate: "2026-10-32" }),
             { status: 400, body: { error: "Income date must be a valid date in YYYY-MM-DD format." } 
         });
@@ -198,32 +187,30 @@ describe("FR4 Expense Tracking", () => {
         assert.equal(parsePositiveInteger(0), null);
     });
 
-    it("FR4_Test4 rejects blank category ID", () => {
-        assert.equal(parsePositiveInteger(""), null);
-    });
-
-    it("FR4_Test5 expense route rejects a blank category", async () => {
+    it("FR4_Test4 expense route rejects a blank category", async () => {
         assert.deepEqual(await callRoute("post", "/api/expenses", { ...validExpense, categoryId: "" }),
             { status: 400, body: { error: "A valid expense category is required." } 
         });
     });
 
-    it("FR4_Test6 expense route rejects a negative amount", async () => {
+    it("FR4_Test5 expense route rejects a negative amount", async () => {
         assert.deepEqual(await callRoute("post", "/api/expenses", { ...validExpense, amount: "-10.00" }),
             { status: 400, body: { error: "Expense amount must be a valid number greater than 0." } 
+        });
+    });
+
+    it("FR4_Test6 expense route rejects wrong date format", async () => {
+        assert.deepEqual(await callRoute("post", "/api/expenses", { ...validExpense, expenseDate: "10/27/2026" }),
+            { status: 400, body: { error: "Expense date must be a valid date in YYYY-MM-DD format."} 
         });
     });
 });
 
 // FR6 Debt Payoff Calculator
-const debtPayoffRoute = app.router.stack.find(
-    (layer) => layer.route && layer.route.path === "/api/calculator/debt-payoff").route;
-const debtPayoffHandler = debtPayoffRoute.stack[debtPayoffRoute.stack.length - 1].handle;
-
 function postDebtPayoff(balance, interestRate, monthlyPayment) {
     const req = { body: { balance, interestRate, monthlyPayment }, session: { userId: 1 } };
     const res = fakeResponse();
-    debtPayoffHandler(req, res);
+    routeHandler("post", "/api/calculator/debt-payoff")(req, res);
     return { status: res.statusCode ?? 200, body: res.body };
 }
 
@@ -240,9 +227,9 @@ describe("FR6 Debt Payoff Calculator", () => {
         });
     });
 
-    it("FR6_Test3 calc from text", () => {
-        assert.deepEqual(postDebtPayoff("1000", "12", "100"),
-            {status: 200, body: { monthsToPayoff: 11, yearsToPayoff: 0.9, totalInterest: 58.98 } 
+    it("FR6_Test3 calculates a high interest payoff from text input", () => {
+        assert.deepEqual(postDebtPayoff("1000", "30", "100"),
+            {status: 200, body: { monthsToPayoff: 12, yearsToPayoff: 1, totalInterest: 165.33 } 
         });
     });
 
@@ -265,8 +252,8 @@ describe("FR6 Debt Payoff Calculator", () => {
     });
 
     it("FR6_Test7 reject debt that takes over 100 years to pay off", () => {
-        assert.deepEqual(postDebtPayoff(1000, 12, 10),
-            {status: 400, body: { error: "The payment must be greater than the monthly interest." } 
+        assert.deepEqual(postDebtPayoff(100000, 12, 1000.001),
+            {status: 400, body: { error: "The debt would not be paid off within 100 years with these inputs." } 
         });
     });
 
@@ -292,5 +279,48 @@ describe("FR6 Debt Payoff Calculator", () => {
         assert.deepEqual(postDebtPayoff(1000, 12, "abc"),
             {status: 400, body: { error: "Balance, interest rate, and monthly payment must be valid numbers." } 
         });
+    });
+});
+
+describe("HTTP Integration Tests", () => {
+    let server;
+    let url;
+
+    before(async () => {
+        await new Promise((resolve) => { server = app.listen(0, resolve); });
+        url = `http://127.0.0.1:${server.address().port}`;
+    });
+
+    after(async () => {
+        await new Promise((resolve) => server.close(resolve));
+    });
+
+    it("FR1_Test15 logout is successful", async () => {
+        const response = await fetch(`${url}/api/logout`, { method: "POST" });
+        assert.equal(response.status, 200);
+        assert.deepEqual(await response.json(), { message: "Signed out."});
+    });
+
+    const protectedRoutes = [
+        ["FR2_Test2", "GET", "/api/me"],
+        ["FR2_Test3", "GET", "/api/categories"],
+        ["FR2_Test4", "POST", "/api/income"],
+        ["FR2_Test5", "POST", "/api/expenses"],
+        ["FR2_Test6", "GET", "/api/dashboard/summary"],
+        ["FR2_Test7", "POST", "/api/calculator/debt-payoff"]
+    ];
+
+    for (const [testId, method, path] of protectedRoutes) {
+        it(`${testId} ${method} ${path} returns 401 when logged out`, async () => {
+            const response = await fetch(`${url}${path}`, { method });
+            assert.equal(response.status, 401);
+            assert.deepEqual(await response.json(), { error: "Please log in." });
+        });
+    }
+
+    it("NFR3_Test1 unknown API route returns 404", async () => {
+        const response = await fetch(`${url}/api/badrouteexample`);
+        assert.equal(response.status, 404);
+        assert.deepEqual(await response.json(), { error: "API endpoint not found." });
     });
 });
