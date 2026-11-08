@@ -38,109 +38,256 @@
   <main id="dashboardView" class="app-layout hidden">
     <aside>
       <div class="brand"><div class="logo">$</div><strong>Financial<br>Wellness</strong></div>
-      <nav><a href="#overview" class="active">▦ <span>Dashboard</span></a><a href="#addIncome">↗ <span>Income</span></a><a href="#addExpense">↘ <span>Expenses</span></a><a href="#calculator">◫ <span>Calculator</span></a></nav>
+      <!-- Sidebar nav-->
+      <nav class="sidebar-nav">
+        <!-- header -->
+        <button class="nav-tab active" data-page="dashboard">
+          <span>Dashboard</span></button>
+        <button class="nav-tab" data-page="income">
+          <span> Income </span></button>
+        <button class="nav-tab" data-page="expenses">
+          <span>Expenses</span></button>
+        <button class="nav-tab" data-page="goals">
+          <span>Goals</span></button>
+        <button class="nav-tab" data-page="calculators">
+          <span>Calculators</span></button>
+        </nav>
       <button id="logoutButton" class="outline">Sign out</button>
     </aside>
+
     <section class="content">
-      <header><div><p class="eyebrow" id="monthLabel"></p><h1>Welcome back, <span id="firstName">User</span></h1><p>Here is your current monthly snapshot.</p></div><div class="environment"><i></i>Local test environment</div></header>
+      <header><div>
+        <!-- dashboard header-->
+        <p class="eyebrow" id="monthLabel"></p>
+        <h1>Welcome back, <span id="firstName">User</span></h1>
+        <p>Here is your current monthly snapshot.</p></div>
+        <div class="environment"><i></i>Local test environment</div></header>
+        
+        <!--panel 1, dashboard-->
+        <div id="page-dashboard" class="page-panel active">
+          <!-- summary grid-->
+          <section id="overview" class="summary-grid">
+            <!-- main grid-->
+            <article class="summary card">
+              <div class="icon green">↗</div><div>
+                <span>Income</span>
+                <strong id="totalIncome">$0.00</strong>
+              </div>
+            </article>
+            
+            <article class="summary card">
+              <div class="icon orange">↘</div>
+              <div><span>Expenses</span>
+                <strong id="totalExpenses">$0.00</strong>
+              </div>
+            </article>
+              
+            <article class="summary card">
+              <div class="icon blue">$</div>
+              <div>
+                <span>Remaining</span>
+                <strong id="remaining">$0.00</strong>
+              </div>
+            </article>
+            
+            <article class="summary card">
+              <div class="icon purple">▤</div>
+              <div>
+                <span>Outstanding debt</span>
+                <strong id="totalDebt">$0.00</strong>
+              </div>
+            </article>
+                
+            <article class="summary card">
+                <div class="icon green">♥</div>
+                <div><span>Financial Health Score</span>
+                <strong id="healthScore">--/100</strong> 
+                <small id="healthStatus">
+                  Waiting for financial data
+                </small>
+              </div>
+            </article>
+          </section>
+          
+          <!-- main grid-->
+          <section class="main-grid">
+            <article class="card budget-card">
+              <div class="card-title"><div>
+                <h2>Monthly cash flow</h2>
+                <p>Income remaining after expenses</p></div>
+                <strong id="remainingPercent">0%</strong></div>
+                <div class="progress"><span id="progressBar"></span></div>
+                <div class="progress-labels"><span id="spentLabel">$0 spent</span>
+                  <span id="incomeLabel">$0 income</span></div><div class="tip">
+                    <strong>Testing tip</strong><p>Add an income or expense below. The summary updates using values stored in MySQL.</p>
+                  </div>
+                </article>
+            <article class="chart-card"><div class="card-title"><div>
+              <h2>Income vs. Expenses</h2><p>Monthly financial overview</p>
+              </div></div>
+              <div class="chart-wrapper">
+              <canvas id="budgetChart"></canvas>
+              </div>
+            </article>
+            <article class="card activity-card">
+              <div class="card-title"><div>
+                <h2>Recent activity</h2>
+                <p>Latest database entries</p></div></div>
+                <div id="activityList" class="activity-list">
+                  <p class="empty">No activity yet.</p>
+                </div>
+              </article>
+          </section>
+        </div>
 
-      <section id="overview" class="summary-grid">
-        <article class="summary card"><div class="icon green">↗</div><div><span>Income</span><strong id="totalIncome">$0.00</strong></div></article>
-        <article class="summary card"><div class="icon orange">↘</div><div><span>Expenses</span><strong id="totalExpenses">$0.00</strong></div></article>
-        <article class="summary card"><div class="icon blue">$</div><div><span>Remaining</span><strong id="remaining">$0.00</strong></div></article>
-        <article class="summary card"><div class="icon purple">▤</div><div><span>Outstanding debt</span><strong id="totalDebt">$0.00</strong></div></article>
-        <article class="summary card">
-          <div class="icon green">♥</div>
-          <div><span>Financial Health Score</span>
-          <strong id="healthScore">98/100</strong></div>
-        </article>
-      </section>
-
-      <section class="main-grid">
-        <article class="card budget-card"><div class="card-title"><div><h2>Monthly cash flow</h2><p>Income remaining after expenses</p></div><strong id="remainingPercent">0%</strong></div><div class="progress"><span id="progressBar"></span></div><div class="progress-labels"><span id="spentLabel">$0 spent</span><span id="incomeLabel">$0 income</span></div><div class="tip"><strong>Testing tip</strong><p>Add an income or expense below. The summary updates using values stored in MySQL.</p></div></article>
-        <article class="chart-card"><div class="card-title"><div><h2>Income vs. Expenses</h2><p>Monthly financial overview</p></div></div><canvas id="budgetChart"></canvas></article>
-        <article class="card activity-card"><div class="card-title"><div><h2>Recent activity</h2><p>Latest database entries</p></div></div><div id="activityList" class="activity-list"><p class="empty">No activity yet.</p></div></article>
-      </section>
-
-
-      <section class="form-grid">
-        <article id="addIncome" class="card form-card"><h2>＋ Add income</h2><form id="incomeForm">
-          <label>Source<input name="source" placeholder="Employer" required></label>
-          <div class="two-col"><label>Amount<input name="amount" type="number" min="0.01" step="0.01" placeholder="4500.00" required></label><label>Type<select name="incomeType"><option>Salary</option><option>Side Income</option><option>Investment</option><option>Other</option></select></label></div>
-          <label>Date<input name="incomeDate" type="date" required></label><label>Description<input name="description" placeholder="Monthly paycheck"></label>
-          <button class="primary">Add income</button>
-        </form></article>
-        <article id="addExpense" class="card form-card"><h2>＋ Add expense</h2><form id="expenseForm">
-          <label>Merchant<input name="merchant" placeholder="Kroger"></label>
-          <div class="two-col"><label>Amount<input name="amount" type="number" min="0.01" step="0.01" placeholder="75.50" required></label><label>Category<select id="categorySelect" name="categoryId" required><option value="">Loading…</option></select></label></div>
-          <label>Date<input name="expenseDate" type="date" required></label><label>Description<input name="description" placeholder="Groceries"></label>
-          <button class="primary">Add expense</button>
-        </form></article>
-        <article id="calculator" class="card form-card"><h2>◫ Debt payoff</h2><form id="calculatorForm">
-          <label>Current balance<input name="balance" type="number" min="0.01" step="0.01" placeholder="10000" required></label>
-          <div class="two-col"><label>Interest rate (%)<input name="interestRate" type="number" min="0" step="0.01" placeholder="18" required></label><label>Monthly payment<input name="monthlyPayment" type="number" min="0.01" step="0.01" placeholder="400" required></label></div>
-          <button class="primary">Calculate payoff</button>
-        </form><div id="calculatorResult" class="result hidden"></div></article>
-       
-        <!--<article class="card form-card">
-         <h2>＋ Add debt</h2>
-          <form id="debtForm">
-          <label>
-            Debt Name
-            <input name="debtName" placeholder="Credit Card">
-          </label>
-          <label>
-            Amount
-            <input name="amount" type="number" step="0.01" required>
-          </label>
-          <button class="primary">
-            Add Debt
-          </button>
-          </form></article>
-      </section> -->
-
-        <section class="analytics-grid">
-          <article class="chart-card card">
-           <div class="card-title">
-            <div>
-              <h2>Debt Projection</h2>
-              <p>Estimated payoff based on available cash flow</p>
-             </div>
+          <!-- panel 2, income-->
+           <div id="page-income" class="page-panel">
+            <div class="page-heading">
+              <!--income-->
+              <h2>Income Management</h2>
+              <p>Record and manage your income sources.</p>
             </div>
-            <canvas id="debtProjectionChart"></canvas>
-          </article>
-        </section>
+            
+            <section class="form-grid single-panel-grid">
+              <article id="addIncome" class="card form-card">
+                <h2>＋ Add income</h2>
+                <form id="incomeForm">
+                  <label>Source<input name="source" placeholder="Employer" required></label>
+                  <div class="two-col"><label>Amount<input name="amount" type="number" min="0.01" step="0.01" placeholder="4500.00" required></label>
+                    <label>Type<select name="incomeType">
+                      <option>Salary</option>
+                      <option>Side Income</option>
+                      <option>Investment</option>
+                      <option>Other</option>
+                    </select>
+                  </label>
+                </div>
+                  <label>Date
+                    <input name="incomeDate" type="date" required></label>
+                    <label>Description<input name="description" placeholder="Monthly paycheck"></label>
+                  <button class="primary">Add income</button>
+                </form>
+              </article>
+            </section>
+           </div>
 
-      <section class="goal-card card">
-        <div class="goal-header">
-          <h2>Financial Goals Progress</h2>
-          <span id="savingsPercent">0% Complete</span>
-        </div>
-        <p id="goalDisplay">
-            Goal: $5000
-          </p>
-        <div class="savings-bar-large"> 
-          <div id="savingsFill" class="savings-fill"></div>
-        </div>
-          <div class="goal-input">
-            <label>Set Savings Goal</label>
-            <input type="number" id="goalAmount" placeholder="5000" min="1">
-            <button type="button" id="saveGoalButton">Save Goal</button>
+           <!-- panel 3, expenses-->
+            <div id="page-expenses" class="page-panel">
+              <article id="addExpense" class="card form-card"><h2>＋ Add expense</h2>
+                <form id="expenseForm">
+                  <label>Merchant<input name="merchant" placeholder="Kroger"></label>
+                  <div class="two-col">
+                    <label>Amount<input name="amount" type="number" min="0.01" step="0.01" placeholder="75.50" required></label>
+                    <label>Category<select id="categorySelect" name="categoryId" required>
+                      <option value="">Loading…</option>
+                    </select></label></div>
+                  <label>Date<input name="expenseDate" type="date" required></label>
+                  <label>Description<input name="description" placeholder="Groceries"></label>
+                  <button class="primary">Add expense</button>
+                </form>
+              </article>  
+            </div>
+
+            <!-- panel 4, savings goals and debt projection-->
+             <div id="page-goals" class="page-panel">
+              <div class="page-heading">
+                <h2>Financial Goals</h2>
+                <p>Monitor your savings progress and debt reduction.</p>
+              </div>
+              
+              <section class="goal-card card">
+                <div class="goal-header">
+                <h2>Financial Goals Progress</h2>
+                <span id="savingsPercent">0% Complete</span>
+                </div>
+
+                <p id="goalDisplay">Goal:$5000</p>
+
+                <div class="savings-bar-large">
+                  <div id="savingsFill" class="savings-fill"></div>
+                </div>
+
+                <div class="goal-input">
+                  <label>Set Savings Goal</label>
+                  <input type="number" id="goalAmount"
+                  placeholder="5000" min="1">
+                  <button type="button" id="saveGoalButton">
+                    Save Goal
+                  </button>
+                </div>
+                <p>
+                  Current Savings:
+                  <strong id="savings">$0.00</strong>
+                </p>
+              </section>
+
+              <section class="analytics-grid">
+                <article class="chart-card card">
+                  <div class="card-title">
+                    <div>
+                      <h2>Debt Projection</h2>
+                      <p>Estimated payoff based on available cash flow</p>
+                    </div>
+                  </div>
+                  <div class="chart-wrapper">
+                    <canvas id="debtProjectionChart"></canvas>
+                  </div>
+                </article>
+              </section>
+             </div>
+
+            <!--panel 5, calculator-->
+            <div id="page-calculators" class="page-panel">
+
+               <div class="page-heading">
+                 <h2>Financial Calculators</h2>
+                 <p>Explore debt repayment and financial calculations.</p>
+                </div>
+              <section class="form-grid single-panel-grid">
+            <article class="card form-card">
+              <h2>Debt payoff calculator</h2>
+              <form id="calculatorForm">
+                <label>
+                  Current balance
+                  <input
+                    name="balance"
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    placeholder="10000" required
+                    >
+                </label>
+                <label>
+                  Interest rate (%)
+                    <input
+                        name="interestRate"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="18" required>
+                </label>
+                <label>
+                    Monthly payment
+                    <input
+                        name="monthlyPayment"
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        placeholder="400" required>
+                </label>
+                <button class="primary" type="submit">
+                    Calculate payoff
+                </button>
+              </form>
+              <div
+                id="calculatorResult"
+                class="result hidden"></div>
+              </article>
+            </section>
           </div>
-       
-        <p>
-          Current Savings:
-          <strong id="savings">$0.00</strong>
-        </p>
-      </section>
-
-    </section>
-  
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        </section>
+      </main>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="app.js"></script>
-
-
-  
-  </main>
 </body>
 </html>

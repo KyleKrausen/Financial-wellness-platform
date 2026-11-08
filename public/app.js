@@ -4,46 +4,77 @@ let budgetChart = null;
 
 let debtChart = null;
 
+
+
 function renderChart(income, expenses) {
-  const canvas = document.getElementById("budgetChart");
 
-  if (!canvas) return;
+    const canvas = document.getElementById("budgetChart");
 
-  if (budgetChart) {
-    budgetChart.destroy();
-  }
-  budgetChart = new Chart(canvas, {
-    type: "doughnut",
+    if (!canvas) return;
 
-    data: {
-      labels: [
-        "Income",
-        "Expenses"
-      ],
-
-      datasets: [{
-        data: [
-          income,
-          expenses
-        ],
-
-      backgroundColor: [
-        "#22c55e",
-        "#ef4444"
-      ]
-    }]
-    },
-  options: {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        position: "bottom"
-      }
+    if (budgetChart) {
+        budgetChart.destroy();
+        budgetChart = null;
     }
-  }
-  });
+
+    income = Math.max(0, Number(income) || 0);
+    expenses = Math.max(0, Number(expenses) || 0);
+
+    budgetChart = new Chart(canvas, {
+
+        type: "doughnut",
+
+        data: {
+            labels: ["Income", "Expenses"],
+
+            datasets: [{
+                data: [income, expenses],
+
+                backgroundColor: [
+                    "#22c55e",
+                    "#ef4444"
+                ],
+
+                borderWidth: 0,
+                hoverOffset: 8
+            }]
+        },
+
+        options: {
+
+            responsive: true,
+            maintainAspectRatio: false,
+
+            cutout: "65%",
+
+            plugins: {
+
+                legend: {
+                    position: "bottom",
+
+                    labels: {
+                        padding: 20,
+                        usePointStyle: true
+                    }
+                },
+
+                tooltip: {
+                    callbacks: {
+
+                        label: function(context) {
+
+                            return context.label + ": " +
+                                money.format(context.raw);
+
+                        }
+                    }
+                }
+            }
+        }
+    });
 }
+
+
 
 function updateSavingsGoal (currentSavings, targetGoal) {
   const percent = targetGoal > 0
@@ -88,83 +119,133 @@ async function loadCategories() {
 
 let savingsGoal = Number(localStorage.getItem("savingsGoal")) || 5000;
 
-const saveGoalButton =
-    document.getElementById("saveGoalButton");
+
+
+const saveGoalButton = $("#saveGoalButton");
 
 if (saveGoalButton) {
 
-    saveGoalButton.addEventListener("click", () => {
+    saveGoalButton.addEventListener("click", async () => {
 
-        const value =
-            Number($("#goalAmount").value);
+        const value = Number($("#goalAmount").value);
 
-        if (value > 0) {
-
-            savingsGoal = value;
-
-            localStorage.setItem(
-                "savingsGoal",
-                value
-            );
-
-            loadSummary();
+        if (!Number.isFinite(value) || value <= 0) {
+            showToast("Please enter a valid savings goal.", true);
+            return;
         }
+
+        savingsGoal = value;
+
+        localStorage.setItem("savingsGoal", value);
+
+        await loadSummary();
+
+        showToast("Savings goal updated successfully!");
+
+        $("#goalAmount").value = "";
+
     });
 }
 
 
+
+
 async function loadSummary() {
-  const data = await api("/api/dashboard/summary");
-  $("#totalIncome").textContent = money.format(data.totalIncome); $("#totalExpenses").textContent = money.format(data.totalExpenses);
-  $("#remaining").textContent = money.format(data.remaining); $("#totalDebt").textContent = money.format(data.totalDebt);
+    try {
+        const data = await api("/api/dashboard/summary");
 
+        // Get income and expense totals
+        const income = Number(data.totalIncome) || 0;
+        const expenses = Number(data.totalExpenses) || 0;
+        const remaining = income - expenses;
 
+        // Update dashboard summary cards
+        $("#totalIncome").textContent = money.format(income);
+        $("#totalExpenses").textContent = money.format(expenses);
+        $("#remaining").textContent = money.format(remaining);
+        $("#totalDebt").textContent = money.format(data.totalDebt || 0);
 
-  renderDebtProjection(
-    data.totalDebt,
-    data.remaining
-  );
+        // UPDATE INCOME VS EXPENSES CHART
+        renderChart(income, expenses);
 
-  let score = 0;
+        // Update cash flow progress
+        const spentPercent = income > 0
+            ? Math.min((expenses / income) * 100, 100)
+            : 0;
 
-  if (data.totalIncome > 0) {
-    score =
-        ((data.totalIncome - data.totalExpenses)
-        / data.totalIncome) * 100;
-  }
+        $("#remainingPercent").textContent =
+            `${Math.round(100 - spentPercent)}%`;
 
-  const currentSavings = data.remaining;
-  updateSavingsGoal(currentSavings, savingsGoal)
-  
-  const percent = data.totalIncome > 0 ? Math.max(0, Math.min(100, ((data.totalIncome - data.totalExpenses) / data.totalIncome) * 100)) : 0;
-  $("#remainingPercent").textContent = `${Math.round(percent)}%`; $("#progressBar").style.width = `${percent}%`;
-  $("#spentLabel").textContent = `${money.format(data.totalExpenses)} spent`; $("#incomeLabel").textContent = `${money.format(data.totalIncome)} income`;
-  $("#activityList").innerHTML = data.activity.length ? data.activity.map((item) => `<div class="activity"><div class="activity-icon ${item.kind}">${item.kind === "income" ? "↗" : "↘"}</div><div><strong>${escapeHtml(item.label)}</strong><span>${new Date(item.item_date).toLocaleDateString()}</span></div><b class="${item.kind}">${item.kind === "income" ? "+" : "-"}${money.format(item.amount)}</b></div>`).join("") : '<p class="empty">No activity yet. Add your first entry below.</p>';
-  renderChart(
-    data.totalIncome,
-    data.totalExpenses
-  );
+        $("#progressBar").style.width =
+            `${100 - spentPercent}%`;
 
-  const monthlyGrowth = Math.max(data.remaining, 1);
+        $("#spentLabel").textContent =
+            `${money.format(expenses)} spent`;
 
-  const monthsLeft =
-    Math.ceil(
-        (savingsGoal - currentSavings)
-        / monthlyGrowth
-    );
+        $("#incomeLabel").textContent =
+            `${money.format(income)} income`;
 
-  score = Math.max(0, Math.min(100, score));
+        // Update debt projection
+        renderDebtProjection(
+            data.totalDebt,
+            remaining
+        );
 
-  $("#healthScore").textContent =
-    `${Math.round(score)}/100`;
+        // Calculate financial health score
+        let score = 0;
 
-  if (score > 70)
-    $("#healthScore").style.color = "#176b51";
-  else if (score > 40)
-    $("#healthScore").style.color = "#a85e16";
-  else
-    $("#healthScore").style.color = "#a83f3f";
+        if (income > 0) {
+            score = ((income - expenses) / income) * 100;
+        }
+
+        score = Math.round(
+            Math.max(0, Math.min(100, score))
+        );
+
+        const scoreElement = $("#healthScore");
+        const statusElement = $("#healthStatus");
+
+        scoreElement.textContent = `${score}/100`;
+
+        if (income <= 0) {
+
+            statusElement.textContent =
+                "Add income to calculate";
+
+            scoreElement.style.color = "#68766f";
+            statusElement.style.color = "#68766f";
+
+        } else if (score >= 70) {
+
+            statusElement.textContent =
+                "Healthy financial standing";
+
+            scoreElement.style.color = "#176b51";
+            statusElement.style.color = "#176b51";
+
+        } else if (score >= 40) {
+
+            statusElement.textContent =
+                "Moderate financial standing";
+
+            scoreElement.style.color = "#a85e16";
+            statusElement.style.color = "#a85e16";
+
+        } else {
+
+            statusElement.textContent =
+                "Needs improvement";
+
+            scoreElement.style.color = "#a83f3f";
+            statusElement.style.color = "#a83f3f";
+        }
+
+    } catch (error) {
+        console.error("Dashboard summary error:", error);
+        showToast("Unable to load dashboard summary.", true);
+    }
 }
+
 
 function escapeHtml(value) { const node = document.createElement("div"); node.textContent = String(value); return node.innerHTML; }
 
@@ -186,64 +267,144 @@ api("/api/me").then((result) => showDashboard(result.user)).catch(() => {});
 
 
 
+
 function renderDebtProjection(totalDebt, remaining) {
-    const canvas =
-        document.getElementById("debtProjectionChart");
+
+    const canvas = document.getElementById("debtProjectionChart");
 
     if (!canvas) return;
 
-    if(debtChart){
-      debtChart.destroy();
+    if (debtChart) {
+        debtChart.destroy();
+        debtChart = null;
     }
 
-    let balance = totalDebt;
-    const labels = [];
-    const values = [];
+    totalDebt = Math.max(0, Number(totalDebt) || 0);
+    remaining = Number(remaining) || 0;
 
-    const payment =
-        Math.max(remaining * 0.3, 50);
+    // Estimate 30% of positive remaining cash flow
+    const payment = remaining * 0.30;
 
-    let month = 0;
+    const labels = ["Today"];
+    const values = [totalDebt];
 
-    while (balance > 0 && month < 60) {
-        labels.push(`Month ${month}`);
-        values.push(balance);
+    if (totalDebt === 0) {
 
-        balance -= payment;
-        month++;
-    }
-  
-    debtChart = new Chart(canvas, {
-    type: "line",
+        labels.push("Debt-free");
+        values.push(0);
 
-    data: {
-        labels,
-        datasets: [{
-            label: "Projected Debt",
+    } else if (payment <= 0) {
 
-            data: values,
+        labels.push("No projected reduction");
+        values.push(totalDebt);
 
-            borderColor: "#7352a3",
-            backgroundColor: "#7352a320",
+    } else {
 
-            fill: true,
+        let balance = totalDebt;
+        let month = 1;
 
-            tension: 0.3
-        }]
-    },
-    options: {
-        responsive: true,
+        while (balance > 0 && month <= 120) {
 
-        plugins: {
-            legend: {
-                display: false
-            }
-        },
-        scales: {
-            y: {
-                beginAtZero: true
-            }
+            balance = Math.max(0, balance - payment);
+
+            labels.push(`Month ${month}`);
+            values.push(balance);
+
+            month++;
         }
     }
-  });
+
+    debtChart = new Chart(canvas, {
+
+        type: "line",
+
+        data: {
+            labels: labels,
+
+            datasets: [{
+                label: "Projected Debt",
+
+                data: values,
+
+                borderColor: "#7352a3",
+                backgroundColor: "rgba(115, 82, 163, 0.12)",
+
+                borderWidth: 3,
+                pointRadius: 3,
+                pointBackgroundColor: "#7352a3",
+
+                fill: true,
+                tension: 0.3
+            }]
+        },
+
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+
+            plugins: {
+
+                legend: {
+                    display: true,
+                    position: "bottom"
+                },
+
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return "Balance: " +
+                                money.format(context.parsed.y);
+                        }
+                    }
+                }
+            },
+
+            scales: {
+
+                y: {
+                    beginAtZero: true,
+
+                    ticks: {
+                        callback: function(value) {
+                            return money.format(value);
+                        }
+                    }
+                },
+
+                x: {
+                    title: {
+                        display: true,
+                        text: "Time"
+                    }
+                }
+            }
+        }
+    });
 }
+
+
+document.querySelectorAll(".nav-tab").forEach((tab)=> {
+    tab.addEventListener("click", () =>{
+        // remove active class from all nav buttons
+        document.querySelectorAll(".nav-tab").forEach((item) => {
+            item.classList.remove("active");
+        });
+        
+        // hide all panels
+        document.querySelectorAll(".page-panel").forEach((panel) => {
+          panel.classList.remove("active");
+        });
+        
+        //activate selected button
+        tab.classList.add("active");
+
+        //display selected
+        const selectedPage = document.getElementById(
+          `page-${tab.dataset.page}`
+        );
+
+        if (selectedPage) {
+          selectedPage.classList.add("active");
+        }
+    });
+})
