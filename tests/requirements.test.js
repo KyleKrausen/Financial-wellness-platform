@@ -1,6 +1,8 @@
 const { describe, it, before, after } = require("node:test");
 const assert = require("node:assert/strict");
 const { app, requireLogin, isValidEmail, normalizeEmail, isValidIsoDate, parsePositiveNumber, parsePositiveInteger } = require("../server.js");
+const { spawnSync } = require("node:child_process");
+const path = require("node:path");
 
 // FR1  User Registration and Auth
 function routeHandler(method, path) {
@@ -10,9 +12,9 @@ function routeHandler(method, path) {
     return layer.route.stack[layer.route.stack.length - 1].handle;
 }
 
-async function callRoute(method, path, body) {
+async function callRoute(method, path, body = {}, params = {}, query = {}) {
     const res = fakeResponse();
-    await routeHandler(method, path)({ body, session: { userId: 1 } }, res, () => {});
+    await routeHandler(method, path)({ body, params, query, session: { userId: 1 } }, res, () => {});
     return { status: res.statusCode ?? 200, body: res.body };
 }
 
@@ -95,6 +97,11 @@ describe("FR1 User Registration and Auth", () => {
             { status: 400, body: { error: "Username must be between 3 and 50 characters." } 
         });
     });
+
+    it("FR1_Test16 register rejects a first name over 50 characters", async () => {
+        assert.deepEqual(await callRoute("post", "/api/register", { ...validUser, firstName: "a".repeat(51) }),
+            { status: 400, body: { error: "First and last names must be 50 characters or fewer." } });
+    });
 });
 
 // FR2 Authenticated Session and Profile Access
@@ -167,6 +174,21 @@ describe("FR3 Income Tracking", () => {
             { status: 400, body: { error: "Income date must be a valid date in YYYY-MM-DD format." } 
         });
     });
+
+    it("FR3_Test10 income rejects source names over 100 characters", async () => {
+        assert.deepEqual(await callRoute("post", "/api/income", { ...valideIncome, source: "a".repeat(101) }),
+            { status: 400, body: { error: "Income source must be 100 characters or fewer." } });
+    });
+
+    it("FR3_Test11 editing income rejects an invalid income ID", async () => {
+        assert.deepEqual(await callRoute("put", "/api/income/:incomeId", valideIncome, { incomeId: "abc" }),
+            { status: 400, body: { error: "A valid income ID is required." } });
+    });
+
+    it("FR3_Test12 income rejects start dates after the end date", async () => {
+        assert.deepEqual(await callRoute("get", "/api/income", {}, {}, { startDate: "2026-11-30", endDate: "2026-11-01" }),
+            { status: 400, body: { error: "startDate cannot be after endDate." } });
+    });
 });
 
 // FR4 Expense Tracking
@@ -203,6 +225,21 @@ describe("FR4 Expense Tracking", () => {
         assert.deepEqual(await callRoute("post", "/api/expenses", { ...validExpense, expenseDate: "10/27/2026" }),
             { status: 400, body: { error: "Expense date must be a valid date in YYYY-MM-DD format."} 
         });
+    });
+
+    it("FR4_Test7 expense route rejects a merchant name over 100 characters", async () => {
+        assert.deepEqual(await callRoute("post", "/api/expenses", { ...validExpense, merchant: "a".repeat(101) }),
+            { status: 400, body: { error: "Merchant must be 100 characters or fewer." } });
+    });
+
+    it("FR4_Test8 editing an expense rejects ID 0", async () => {
+        assert.deepEqual(await callRoute("put", "/api/expenses/:expenseId", validExpense, { expenseId: "0" }),
+            { status: 400, body: { error: "A valid expense ID is required." } });
+    });
+
+    it("FR4_Test9 expense filter rejects a non-number categories", async () => {
+        assert.deepEqual(await callRoute("get", "/api/expenses", {}, {}, { categoryId: "abc" }),
+            { status: 400, body: { error: "categoryId must be a positive integer." } });
     });
 });
 
@@ -282,6 +319,50 @@ describe("FR6 Debt Payoff Calculator", () => {
     });
 });
 
+// FR7 Budget and Debt Record Management
+describe("FR7 Budget and Debt Record Management", () => {
+    const validBudget = { budgetMonth: 11, budgetYear: 2026, items: [{ categoryId: 1, budgetAmount: 300 }] };
+    const validDebt = { debtName: "Car loan", debtType: "Auto", currentBalance: "5000", interestRate: "6", minimumPayment: "150", paymentDueDate: "2026-12-01"
+};  
+
+    it("FR7_Test1 budget rejects months over 12", async () => {
+        assert.deepEqual(await callRoute("post", "/api/budgets", { ...validBudget, budgetMonth: 13 }),
+            { status: 400, body: { error: "budgetMonth must be an integer from 1 through 12." }
+        });
+    });
+        it("FR7_Test2 budget rejects year 1999", async () => {
+        assert.deepEqual(await callRoute("post", "/api/budgets", { ...validBudget, budgetYear: 1999 }),
+            { status: 400, body: { error: "budgetYear must be an integer from 2000 through 2200." } });
+    });
+
+    it("FR7_Test3 budget rejects a category amount of 0", async () => {
+        assert.deepEqual(await callRoute("post", "/api/budgets", { ...validBudget, items: [{ categoryId: 1, budgetAmount: 0 }] }),
+            { status: 400, body: { error: "Each budget item must have a budgetAmount greater than 0." } });
+    });
+
+    it("FR7_Test4 budget rejects the same category twice", async () => {
+        assert.deepEqual(await callRoute("post", "/api/budgets", { ...validBudget,
+            items: [{ categoryId: 1, budgetAmount: 100 }, { categoryId: 1, budgetAmount: 50 }] }),
+            { status: 400, body: { error: "A category can only appear once in the same budget." } });
+    });
+
+    it("FR7_Test5 debt requires a name", async () => {
+        assert.deepEqual(await callRoute("post", "/api/debts", { ...validDebt, debtName: "" }),
+            { status: 400, body: { error: "Debt name is required and must be 100 characters or fewer." } });
+    });
+
+    it("FR7_Test6 debt rejects a negative balance", async () => {
+        assert.deepEqual(await callRoute("post", "/api/debts", { ...validDebt, currentBalance: "-1" }),
+            { status: 400, body: { error: "Current balance must be a valid number of 0 or greater." } });
+    });
+
+    it("FR7_Test7 debt rejects a wrongly formatted due date", async () => {
+        assert.deepEqual(await callRoute("post", "/api/debts", { ...validDebt, paymentDueDate: "12/01/2026" }),
+            { status: 400, body: { error: "Payment due date must be a valid date in YYYY-MM-DD format." } });
+    });
+});
+    
+
 describe("HTTP Integration Tests", () => {
     let server;
     let url;
@@ -301,17 +382,13 @@ describe("HTTP Integration Tests", () => {
         assert.deepEqual(await response.json(), { message: "Signed out."});
     });
 
-    const protectedRoutes = [
-        ["FR2_Test2", "GET", "/api/me"],
-        ["FR2_Test3", "GET", "/api/categories"],
-        ["FR2_Test4", "POST", "/api/income"],
-        ["FR2_Test5", "POST", "/api/expenses"],
-        ["FR2_Test6", "GET", "/api/dashboard/summary"],
-        ["FR2_Test7", "POST", "/api/calculator/debt-payoff"]
-    ];
+    const publicRoutes = ["/api/health", "/api/register", "/api/login", "/api/logout"];
+    const protectedRoutes = app.router.stack
+        .filter((l) => l.route && l.route.path.startsWith("/api/") && !publicRoutes.includes(l.route.path))
+        .flatMap((l) => Object.keys(l.route.methods).map((m) => [m.toUpperCase(), l.route.path.replace(/:\w+/g, "1")]));
 
-    for (const [testId, method, path] of protectedRoutes) {
-        it(`${testId} ${method} ${path} returns 401 when logged out`, async () => {
+    for (const [method, path] of protectedRoutes) {
+        it(`FR2_Test2 ${method} ${path} returns 401 when logged out`, async () => {
             const response = await fetch(`${url}${path}`, { method });
             assert.equal(response.status, 401);
             assert.deepEqual(await response.json(), { error: "Please log in." });
@@ -322,5 +399,82 @@ describe("HTTP Integration Tests", () => {
         const response = await fetch(`${url}/api/badrouteexample`);
         assert.equal(response.status, 404);
         assert.deepEqual(await response.json(), { error: "API endpoint not found." });
+    });
+
+    it("NFR3_Test2 handle 100 concurrent requests", async () => {
+        const start = performance.now();
+        const responses = await Promise.all(Array.from({ length: 100}, () => fetch(`${url}/api/me`))
+        );
+        const elapsed = performance.now() - start;
+        assert.equal(responses.every((r) => r.status === 401), true);
+        assert.ok(elapsed < 2000, `took ${Math.round(elapsed)} ms`);
+    });
+
+    it("NFR4_Test2 logged-out request does not receive session cookie", async () => {
+        const response = await fetch(`${url}/api/me`);
+        assert.equal(response.headers.get("set-cookie"), null);
+    });
+
+    it("NFR4_Test3 bad request does not leak errors", async () => {
+        const response = await fetch(`${url}/api/login`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: "bad json"
+        });
+        const text = await response.text();
+        assert.equal(text.includes("SyntaxError"), false);
+        assert.equal(text.includes("node_modules"), false);
+        assert.equal(typeof JSON.parse(text).error, "string");
+    });
+
+    it("NFR4_Test4 no secrets served", async () => {
+        for (const file of ["/.env", "/server.js", "/db.js", "/%2e%2e/.env"]) {
+            const text = await (await fetch(`${url}${file}`)).text();
+            assert.equal(text.includes("SESSION_SECRET"), false, file);
+            assert.equal(text.includes("require("), false, file);
+        }
+    });
+
+    it("NFR4_Test5 responses include security headers", async () => {
+        const response = await fetch(`${url}/`);
+        assert.equal(response.headers.get("x-content-type-options"), "nosniff");
+        assert.equal(response.headers.get("x-frame-options"), "DENY");
+    });
+
+    it("FR1_Test17 login blocked after 10 failed attempts", async () => {
+        const attempt = () => fetch(`${url}/api/login`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email: "", password: "" })
+        });
+        for (let i = 0; i < 10; i++) {
+            assert.equal((await attempt()).status, 400);
+        }
+        const blocked = await attempt();
+        assert.equal(blocked.status, 429);
+        assert.deepEqual(await blocked.json(), { error: "Too many authentication attempts. Please try again later." });
+    });
+});
+
+describe("NFR3 Performance", () => {
+    it("NFR3_Test3 1,000 worst-case debt calculations finish within 1 second", () => {
+        const start = performance.now();
+        for (let i = 0; i < 1000; i++) {
+            postDebtPayoff(100000, 12, 1000.001);
+        }
+        const elapsed = performance.now() - start;
+        assert.ok(elapsed < 1000, `took ${Math.round(elapsed)} ms`);
+    });
+});
+
+describe("NFR4 Security", () => {
+    it("NFR4_Test1 server refuses to start without SESSION_SECRET", () => {
+        const result = spawnSync(process.execPath, [path.join(__dirname, "..", "server.js")], {
+            env: { ...process.env, SESSION_SECRET: "" },
+            encoding: "utf8",
+            timeout: 10000
+        });
+        assert.notEqual(result.status, 0);
+        assert.equal(result.stderr.includes("SESSION_SECRET is required"), true);
     });
 });
